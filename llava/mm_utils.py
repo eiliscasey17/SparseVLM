@@ -1,9 +1,10 @@
 from PIL import Image
 from io import BytesIO
 import base64
-import torch
 import math
 import ast
+import numpy as np
+import torch
 
 from transformers import StoppingCriteria
 from llava.constants import IMAGE_TOKEN_INDEX
@@ -140,8 +141,7 @@ def process_anyres_image(image, processor, grid_pinpoints):
     image_original_resize = image.resize((processor.size['shortest_edge'], processor.size['shortest_edge']))
 
     image_patches = [image_original_resize] + patches
-    image_patches = [processor.preprocess(image_patch, return_tensors='pt')['pixel_values'][0]
-                     for image_patch in image_patches]
+    image_patches = [_preprocess_single_image(image_patch, processor) for image_patch in image_patches]
     return torch.stack(image_patches, dim=0)
 
 
@@ -163,20 +163,46 @@ def expand2square(pil_img, background_color):
         return result
 
 
+def _preprocess_single_image(image, image_processor):
+    pixel_values = image_processor.preprocess(image, return_tensors=None)["pixel_values"]
+
+    if isinstance(pixel_values, list):
+        if len(pixel_values) != 1:
+            raise ValueError(
+                f"Expected exactly one processed image, but got {len(pixel_values)} entries."
+            )
+        pixel_values = pixel_values[0]
+
+    if isinstance(pixel_values, torch.Tensor):
+        return pixel_values
+
+    if hasattr(pixel_values, "shape") and hasattr(pixel_values, "dtype"):
+        pixel_values = np.asarray(pixel_values, dtype=np.float32)
+        return torch.tensor(pixel_values.tolist(), dtype=torch.float32)
+
+    return torch.tensor(pixel_values, dtype=torch.float32)
+
+
 def process_images(images, image_processor, model_cfg):
     image_aspect_ratio = getattr(model_cfg, "image_aspect_ratio", None)
     new_images = []
     if image_aspect_ratio == 'pad':
         for image in images:
             image = expand2square(image, tuple(int(x*255) for x in image_processor.image_mean))
-            image = image_processor.preprocess(image, return_tensors='pt')['pixel_values'][0]
+            image = _preprocess_single_image(image, image_processor)
             new_images.append(image)
     elif image_aspect_ratio == "anyres":
         for image in images:
             image = process_anyres_image(image, image_processor, model_cfg.image_grid_pinpoints)
             new_images.append(image)
     else:
-        return image_processor(images, return_tensors='pt')['pixel_values']
+        # Some transformer/image-processor versions are brittle when asked to
+        # tensorize a batch directly, even when the per-image preprocessing
+        # would produce compatible shapes. Process items individually first,
+        # then stack only when shapes match.
+        for image in images:
+            image = _preprocess_single_image(image, image_processor)
+            new_images.append(image)
     if all(x.shape == new_images[0].shape for x in new_images):
         new_images = torch.stack(new_images, dim=0)
     return new_images

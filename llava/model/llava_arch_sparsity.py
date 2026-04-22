@@ -29,7 +29,14 @@ from llava.mm_utils import get_anyres_image_grid_shape
 from llava.model.sparsity_experiments.sparseVila import generate_mask, generate_query_aware_mask, get_sink_tokens, compare_masks
 from llava.model.sparsity_experiments.semanticClustering import register_key_hook, cluster_keys, mean_cluster_attention, generate_cluster_mask, prune_cluster
 
+from dataclasses import dataclass
 
+from llava.model.vision_memory import build_vision_memory, VisionMemory
+from llava.model.vision_retriever import (
+    VisionRetrievalConfig,
+    build_text_query_representation,
+    retrieve_visual_tokens_for_turn,
+)
 
 class LlavaMetaModel:
 
@@ -142,43 +149,6 @@ class LlavaMetaForCausalLM(ABC):
     def get_vision_tower(self):
         return self.get_model().get_vision_tower()
 
-    def _normalize_vision_token_keep_masks(self, vision_token_keep_masks, num_images):
-        if vision_token_keep_masks is None:
-            return None
-
-        if isinstance(vision_token_keep_masks, torch.Tensor):
-            if vision_token_keep_masks.ndim == 1:
-                vision_token_keep_masks = [vision_token_keep_masks]
-            else:
-                vision_token_keep_masks = [row for row in vision_token_keep_masks]
-        else:
-            vision_token_keep_masks = list(vision_token_keep_masks)
-
-        if len(vision_token_keep_masks) != num_images:
-            raise ValueError(
-                f"Expected {num_images} vision token keep mask(s), got {len(vision_token_keep_masks)}."
-            )
-
-        return vision_token_keep_masks
-
-    def _apply_static_vision_token_mask(self, image_features, keep_mask):
-        if keep_mask is None:
-            return image_features
-
-        keep_mask = keep_mask.to(device=image_features.device)
-        if keep_mask.dtype != torch.bool:
-            keep_mask = keep_mask.bool()
-        if keep_mask.ndim != 1:
-            raise ValueError(
-                f"vision_token_keep_masks entries must be 1D, got shape {tuple(keep_mask.shape)}."
-            )
-        if keep_mask.shape[0] != image_features.shape[0]:
-            raise ValueError(
-                "vision token keep mask length does not match the number of image tokens: "
-                f"{keep_mask.shape[0]} vs {image_features.shape[0]}."
-            )
-        return image_features[keep_mask]
-
     def apply_query_aware_pruning(
         self,
         input_embeds,
@@ -242,6 +212,214 @@ class LlavaMetaForCausalLM(ABC):
             return input_embeds, labels
 
         return torch.cat(rebuilt_embeds, dim=0), torch.cat(rebuilt_labels, dim=0)
+    
+    def encode_images_raw(self, images):
+        """
+        Returns patch tokens before mm_projector, along with the last-layer attentions.
+        Expects batch size 1 for now.
+        """
+        vision_tower = self.get_model().get_vision_tower()
+        tower = vision_tower.vision_tower
+
+        with torch.no_grad():
+            output = tower(
+                images,
+                output_attentions=True,
+                return_dict=True,
+            )
+
+        hidden = output.last_hidden_state   # [B, T, D]
+        attentions = output.attentions[-1]  # [B, H, T, T]
+
+        # drop CLS so patch tokens are indexed [0..N-1]
+        patch_tokens = hidden[:, 1:, :]     # [B, N, D]
+
+        projector_dtype = next(self.get_model().mm_projector.parameters()).dtype
+        patch_tokens = patch_tokens.to(projector_dtype)
+
+        return patch_tokens, attentions
+    def build_single_image_vision_memory(
+        self,
+        images,
+        vision_retrieval_config: VisionRetrievalConfig,
+        patch_grid=None,
+        metadata=None,
+    ):
+        """
+        Builds one VisionMemory for one image.
+        Expects images shape [1, C, H, W].
+        """
+        patch_tokens, attentions = self.encode_images_raw(images)  # [1,N,D], [1,H,T,T]
+        assert patch_tokens.size(0) == 1, "Only batch size 1 supported in this scaffold."
+
+        vm = build_vision_memory(
+            patch_tokens=patch_tokens[0],
+            attentions=attentions,
+            prune_ratio=vision_retrieval_config.prune_ratio,
+            num_sink_tokens=vision_retrieval_config.num_sink_tokens,
+            num_clusters=vision_retrieval_config.num_clusters,
+            clustering_mode=vision_retrieval_config.clustering_mode,
+            cluster_page_size=vision_retrieval_config.cluster_page_size,
+            patch_grid=patch_grid,
+            metadata=metadata,
+        )
+
+        return vm
+    
+    def cache_projected_tokens_in_memory(self, vision_memory: VisionMemory):
+        with torch.no_grad():
+            proj = self.get_model().mm_projector(vision_memory.full_tokens)
+        vision_memory.projected_full_tokens = proj
+
+        from llava.model.vision_memory import rebuild_cluster_stats_from_projected_tokens
+        vision_memory = rebuild_cluster_stats_from_projected_tokens(vision_memory)
+
+        return vision_memory
+    
+    def retrieve_projected_tokens_for_query(
+        self,
+        vision_memory: VisionMemory,
+        input_ids: torch.Tensor,
+        image_token_index: int,
+        vision_retrieval_config: VisionRetrievalConfig,
+    ):
+        """
+        Build query vector from current input_ids, retrieve visual tokens, and return
+        PROJECTED embeddings ready for insertion into the multimodal sequence.
+        """
+        query = build_text_query_representation(
+            embed_tokens_module=self.get_model().embed_tokens,
+            input_ids=input_ids,
+            image_token_index=image_token_index,
+        )  # [D_llm]
+
+        # If vision token dim != text embed dim, add a simple linear map later.
+        # For LLaVA, raw patch tokens and text embeds often live in different spaces.
+        # Easiest baseline: use PROJECTED tokens for retrieval if cached.
+        use_projected = vision_retrieval_config.use_projected_tokens_for_output
+
+        if use_projected and vision_memory.projected_full_tokens is None:
+            vision_memory = self.cache_projected_tokens_in_memory(vision_memory)
+
+        retrieval_query = query
+        token_source_is_projected = use_projected
+
+        selected_tokens, info = retrieve_visual_tokens_for_turn(
+            vision_memory=vision_memory,
+            query=retrieval_query,
+            topk_clusters=vision_retrieval_config.topk_clusters,
+            retrieval_mode=vision_retrieval_config.retrieval_mode,
+            token_budget=vision_retrieval_config.token_budget,
+            use_projected_tokens=token_source_is_projected,
+        )
+
+        # if retrieved raw tokens, project now
+        if not token_source_is_projected:
+            selected_tokens = self.get_model().mm_projector(selected_tokens)
+
+        return selected_tokens, info
+    def prepare_inputs_labels_for_multimodal_with_retrieval(
+        self,
+        input_ids,
+        position_ids,
+        attention_mask,
+        past_key_values,
+        labels,
+        vision_memory: VisionMemory,
+        vision_retrieval_config: VisionRetrievalConfig,
+        image_token_index=IMAGE_TOKEN_INDEX,
+    ):
+        """
+        Same return format as prepare_inputs_labels_for_multimodal(...)
+        but inserts retrieved projected visual tokens instead of full/pruned image tokens.
+        Expects batch size 1.
+        """
+        if input_ids.shape[1] == 1:
+            return input_ids, position_ids, attention_mask, past_key_values, None, labels, None
+
+        _labels = labels
+        _position_ids = position_ids
+        _attention_mask = attention_mask
+
+        if attention_mask is None:
+            attention_mask = torch.ones_like(input_ids, dtype=torch.bool)
+        else:
+            attention_mask = attention_mask.bool()
+
+        if position_ids is None:
+            position_ids = torch.arange(
+                0, input_ids.shape[1], dtype=torch.long, device=input_ids.device
+            ).unsqueeze(0)
+
+        if labels is None:
+            labels = torch.full_like(input_ids, IGNORE_INDEX)
+
+        # remove padding
+        cur_input_ids = input_ids[0][attention_mask[0]]
+        cur_labels = labels[0][attention_mask[0]]
+
+        selected_image_features, retrieval_info = self.retrieve_projected_tokens_for_query(
+            vision_memory=vision_memory,
+            input_ids=cur_input_ids.unsqueeze(0),
+            image_token_index=image_token_index,
+            vision_retrieval_config=vision_retrieval_config,
+        )  # [Nv, D]
+
+        num_images = (cur_input_ids == image_token_index).sum().item()
+        if num_images == 0:
+            cur_input_embeds = self.get_model().embed_tokens(cur_input_ids)
+            new_input_embeds = cur_input_embeds.unsqueeze(0)
+            new_labels = cur_labels.unsqueeze(0)
+            return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels, retrieval_info
+
+        image_token_indices = [-1] + torch.where(cur_input_ids == image_token_index)[0].tolist() + [cur_input_ids.shape[0]]
+
+        cur_input_ids_noim = []
+        cur_labels_noim = []
+        for i in range(len(image_token_indices) - 1):
+            cur_input_ids_noim.append(cur_input_ids[image_token_indices[i] + 1:image_token_indices[i + 1]])
+            cur_labels_noim.append(cur_labels[image_token_indices[i] + 1:image_token_indices[i + 1]])
+
+        split_sizes = [x.shape[0] for x in cur_labels_noim]
+        text_embeds = self.get_model().embed_tokens(torch.cat(cur_input_ids_noim))
+        text_embeds_split = torch.split(text_embeds, split_sizes, dim=0)
+
+        cur_new_input_embeds = []
+        cur_new_labels = []
+
+        for i in range(num_images + 1):
+            cur_new_input_embeds.append(text_embeds_split[i])
+            cur_new_labels.append(cur_labels_noim[i])
+            if i < num_images:
+                cur_new_input_embeds.append(selected_image_features)
+                cur_new_labels.append(
+                    torch.full(
+                        (selected_image_features.shape[0],),
+                        IGNORE_INDEX,
+                        device=cur_labels.device,
+                        dtype=cur_labels.dtype,
+                    )
+                )
+
+        cur_new_input_embeds = [x.to(self.device) for x in cur_new_input_embeds]
+        cur_new_input_embeds = torch.cat(cur_new_input_embeds, dim=0)
+        cur_new_labels = torch.cat(cur_new_labels, dim=0)
+
+        new_input_embeds = cur_new_input_embeds.unsqueeze(0)
+        new_labels = cur_new_labels.unsqueeze(0)
+
+        max_len = new_input_embeds.shape[1]
+        attention_mask = torch.ones((1, max_len), dtype=torch.bool, device=new_input_embeds.device)
+        position_ids = torch.arange(0, max_len, dtype=torch.long, device=new_input_embeds.device).unsqueeze(0)
+
+        if _labels is None:
+            new_labels = None
+        if _attention_mask is not None:
+            attention_mask = attention_mask.to(dtype=_attention_mask.dtype)
+        if _position_ids is None:
+            position_ids = None
+
+        return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels, retrieval_info
 
     def encode_images(self, images, 
 ###################### Modify Here
@@ -309,13 +487,9 @@ class LlavaMetaForCausalLM(ABC):
 ######## Modify Here
         agnostic_sparsity=0,
         aware_sparsity=0,
-        vision_token_keep_masks=None,
-        return_vision_token_metadata=False,
     ):
         vision_tower = self.get_vision_tower()
         if vision_tower is None or images is None or input_ids.shape[1] == 1:
-            if return_vision_token_metadata:
-                return input_ids, position_ids, attention_mask, past_key_values, None, labels, []
             return input_ids, position_ids, attention_mask, past_key_values, None, labels
 
         if type(images) is list or images.ndim == 5:
@@ -373,17 +547,6 @@ class LlavaMetaForCausalLM(ABC):
 ################################################ Modify Here
                                                 agnostic_sparsity=agnostic_sparsity)
 
-        image_features = list(image_features)
-        vision_token_keep_masks = self._normalize_vision_token_keep_masks(
-            vision_token_keep_masks,
-            len(image_features),
-        )
-        if vision_token_keep_masks is not None:
-            image_features = [
-                self._apply_static_vision_token_mask(cur_image_features, keep_mask)
-                for cur_image_features, keep_mask in zip(image_features, vision_token_keep_masks)
-            ]
-
         # TODO: image start / end is not implemented here to support pretraining.
         if getattr(self.config, 'tune_mm_mlp_adapter', False) and getattr(self.config, 'mm_use_im_start_end', False):
             raise NotImplementedError
@@ -411,7 +574,6 @@ class LlavaMetaForCausalLM(ABC):
 
         new_input_embeds = []
         new_labels = []
-        vision_token_metadata = []
         cur_image_idx = 0
         for batch_idx, cur_input_ids in enumerate(input_ids):
             num_images = (cur_input_ids == IMAGE_TOKEN_INDEX).sum()
@@ -463,12 +625,6 @@ class LlavaMetaForCausalLM(ABC):
 
             new_input_embeds.append(cur_new_input_embeds)
             new_labels.append(cur_new_labels)
-            vision_token_metadata.append(
-                {
-                    "batch_idx": batch_idx,
-                    "image_token_ranges": image_token_ranges,
-                }
-            )
 
         # Truncate sequences to max length as image embeddings can make the sequence longer
         tokenizer_model_max_length = getattr(self.config, 'tokenizer_model_max_length', None)
@@ -521,8 +677,6 @@ class LlavaMetaForCausalLM(ABC):
         if _position_ids is None:
             position_ids = None
 
-        if return_vision_token_metadata:
-            return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels, vision_token_metadata
         return None, position_ids, attention_mask, past_key_values, new_input_embeds, new_labels
 
     def initialize_vision_tokenizer(self, model_args, tokenizer):
