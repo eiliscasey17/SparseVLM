@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1300" height="700" viewBox="0 0 1300 700">
+<rect width="100%" height="100%" fill="white"/>
+<text x="70" y="40" font-size="24" font-family="Arial, sans-serif" font-weight="bold" text-anchor="start" fill="#111111">MultiVerse: Baseline vs Retrieval from GPT-Scored Reviews</text>
+<rect x="70" y="120" width="540" height="440" fill="none" stroke="#cccccc"/>
+<text x="70" y="102" font-size="18" font-family="Arial, sans-serif" font-weight="bold" text-anchor="start" fill="#111111">GPT Pass Rate</text>
+<line x1="70" y1="560" x2="610" y2="560" stroke="#e6e6e6" stroke-width="1"/>
+<text x="60" y="565" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">0</text>
+<line x1="70" y1="472" x2="610" y2="472" stroke="#e6e6e6" stroke-width="1"/>
+<text x="60" y="477" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">20</text>
+<line x1="70" y1="384" x2="610" y2="384" stroke="#e6e6e6" stroke-width="1"/>
+<text x="60" y="389" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">40</text>
+<line x1="70" y1="296" x2="610" y2="296" stroke="#e6e6e6" stroke-width="1"/>
+<text x="60" y="301" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">60</text>
+<line x1="70" y1="208" x2="610" y2="208" stroke="#e6e6e6" stroke-width="1"/>
+<text x="60" y="213" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">80</text>
+<line x1="70" y1="120" x2="610" y2="120" stroke="#e6e6e6" stroke-width="1"/>
+<text x="60" y="125" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">100</text>
+<rect x="182" y="327" width="120" height="233" fill="#1f77b4" stroke="#111111"/>
+<text x="242.8" y="319" font-size="14" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#111111">53.0%</text>
+<text x="242.8" y="584" font-size="14" font-family="Arial, sans-serif" font-weight="bold" text-anchor="middle" fill="#111111">Baseline</text>
+<text x="242.8" y="604" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#444444">149/2536 scored</text>
+<rect x="398" y="560" width="120" height="0" fill="#d62728" stroke="#111111"/>
+<text x="458.8" y="552" font-size="14" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#111111">0.0%</text>
+<text x="458.8" y="584" font-size="14" font-family="Arial, sans-serif" font-weight="bold" text-anchor="middle" fill="#111111">Retrieval</text>
+<text x="458.8" y="604" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#444444">0/1057 scored</text>
+<rect x="690" y="120" width="540" height="440" fill="none" stroke="#cccccc"/>
+<text x="690" y="102" font-size="18" font-family="Arial, sans-serif" font-weight="bold" text-anchor="start" fill="#111111">GPT Scoring Coverage</text>
+<line x1="690" y1="560" x2="1230" y2="560" stroke="#e6e6e6" stroke-width="1"/>
+<text x="680" y="565" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">0</text>
+<line x1="690" y1="472" x2="1230" y2="472" stroke="#e6e6e6" stroke-width="1"/>
+<text x="680" y="477" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">20</text>
+<line x1="690" y1="384" x2="1230" y2="384" stroke="#e6e6e6" stroke-width="1"/>
+<text x="680" y="389" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">40</text>
+<line x1="690" y1="296" x2="1230" y2="296" stroke="#e6e6e6" stroke-width="1"/>
+<text x="680" y="301" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">60</text>
+<line x1="690" y1="208" x2="1230" y2="208" stroke="#e6e6e6" stroke-width="1"/>
+<text x="680" y="213" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">80</text>
+<line x1="690" y1="120" x2="1230" y2="120" stroke="#e6e6e6" stroke-width="1"/>
+<text x="680" y="125" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="end" fill="#666666">100</text>
+<rect x="802" y="535" width="120" height="25" fill="#6baed6" stroke="#111111"/>
+<text x="862.8" y="527" font-size="14" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#111111">5.9%</text>
+<text x="862.8" y="584" font-size="14" font-family="Arial, sans-serif" font-weight="bold" text-anchor="middle" fill="#111111">Baseline</text>
+<text x="862.8" y="604" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#444444">mean score 5.05</text>
+<rect x="1018" y="560" width="120" height="0" fill="#fb6a4a" stroke="#111111"/>
+<text x="1078.8" y="552" font-size="14" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#111111">0.0%</text>
+<text x="1078.8" y="584" font-size="14" font-family="Arial, sans-serif" font-weight="bold" text-anchor="middle" fill="#111111">Retrieval</text>
+<text x="1078.8" y="604" font-size="12" font-family="Arial, sans-serif" font-weight="normal" text-anchor="middle" fill="#444444">mean score n/a</text>
+<text x="70" y="670" font-size="13" font-family="Arial, sans-serif" font-weight="normal" text-anchor="start" fill="#666666">Pass rate is measured over successfully scored items only. Coverage shows how many answers received a valid GPT evaluation.</text>
+</svg>

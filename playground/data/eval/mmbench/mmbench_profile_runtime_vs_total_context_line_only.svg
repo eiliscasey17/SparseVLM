@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="900" height="560" viewBox="0 0 900 560">
+<rect width="100%" height="100%" fill="white"/>
+<text x="450.0" y="28" text-anchor="middle" font-size="20" font-family="Arial">MMBench Baseline Profile: Bucket Mean Runtime vs Total Context</text>
+<line x1="146.65" y1="50" x2="146.65" y2="490" stroke="#e6e6e6" stroke-width="1"/>
+<text x="146.65" y="512" text-anchor="middle" font-size="12" font-family="Arial">662</text>
+<line x1="201.88" y1="50" x2="201.88" y2="490" stroke="#e6e6e6" stroke-width="1"/>
+<text x="201.88" y="512" text-anchor="middle" font-size="12" font-family="Arial">677</text>
+<line x1="352.87" y1="50" x2="352.87" y2="490" stroke="#e6e6e6" stroke-width="1"/>
+<text x="352.87" y="512" text-anchor="middle" font-size="12" font-family="Arial">718</text>
+<line x1="805.83" y1="50" x2="805.83" y2="490" stroke="#e6e6e6" stroke-width="1"/>
+<text x="805.83" y="512" text-anchor="middle" font-size="12" font-family="Arial">841</text>
+<line x1="80" y1="490.00" x2="870" y2="490.00" stroke="#e6e6e6" stroke-width="1"/>
+<text x="70" y="494.00" text-anchor="end" font-size="12" font-family="Arial">0.227</text>
+<line x1="80" y1="402.00" x2="870" y2="402.00" stroke="#e6e6e6" stroke-width="1"/>
+<text x="70" y="406.00" text-anchor="end" font-size="12" font-family="Arial">0.233</text>
+<line x1="80" y1="314.00" x2="870" y2="314.00" stroke="#e6e6e6" stroke-width="1"/>
+<text x="70" y="318.00" text-anchor="end" font-size="12" font-family="Arial">0.238</text>
+<line x1="80" y1="226.00" x2="870" y2="226.00" stroke="#e6e6e6" stroke-width="1"/>
+<text x="70" y="230.00" text-anchor="end" font-size="12" font-family="Arial">0.243</text>
+<line x1="80" y1="138.00" x2="870" y2="138.00" stroke="#e6e6e6" stroke-width="1"/>
+<text x="70" y="142.00" text-anchor="end" font-size="12" font-family="Arial">0.249</text>
+<line x1="80" y1="50.00" x2="870" y2="50.00" stroke="#e6e6e6" stroke-width="1"/>
+<text x="70" y="54.00" text-anchor="end" font-size="12" font-family="Arial">0.254</text>
+<line x1="80" y1="490" x2="870" y2="490" stroke="#333" stroke-width="1.5"/>
+<line x1="80" y1="50" x2="80" y2="490" stroke="#333" stroke-width="1.5"/>
+<path d="M 145.83 416.67 L 202.12 411.38 L 351.15 383.27 L 804.17 123.33" fill="none" stroke="#d62728" stroke-width="3"/>
+<circle cx="145.83" cy="416.67" r="5.5" fill="#d62728"/>
+<text x="153.83" y="406.67" font-size="12" font-family="Arial" fill="#b22222">577-667</text>
+<circle cx="202.12" cy="411.38" r="5.5" fill="#d62728"/>
+<text x="210.12" y="401.38" font-size="12" font-family="Arial" fill="#b22222">667-697</text>
+<circle cx="351.15" cy="383.27" r="5.5" fill="#d62728"/>
+<text x="359.15" y="373.27" font-size="12" font-family="Arial" fill="#b22222">697-757</text>
+<circle cx="804.17" cy="123.33" r="5.5" fill="#d62728"/>
+<text x="812.17" y="113.33" font-size="12" font-family="Arial" fill="#b22222">757-max</text>
+<text x="450.0" y="542" text-anchor="middle" font-size="14" font-family="Arial">Average text tokens + 577 vision tokens per bucket</text>
+<text x="20" y="280.0" text-anchor="middle" font-size="14" font-family="Arial" transform="rotate(-90 20 280.0)">Average elapsed seconds</text>
+</svg>

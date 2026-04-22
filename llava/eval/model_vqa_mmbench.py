@@ -56,7 +56,12 @@ def eval_model(args):
     disable_torch_init()
     model_path = os.path.expanduser(args.model_path)
     model_name = get_model_name_from_path(model_path)
-    tokenizer, model, image_processor, context_len = load_pretrained_model(model_path, args.model_base, model_name)
+    tokenizer, model, image_processor, context_len = load_pretrained_model(
+        model_path,
+        args.model_base,
+        model_name,
+        attn_implementation="eager",
+    )
 
     questions = pd.read_table(os.path.expanduser(args.question_file))
     questions = get_chunk(questions, args.num_chunks, args.chunk_idx)
@@ -112,13 +117,18 @@ def eval_model(args):
                     input_ids,
                     images=image_tensor.unsqueeze(0).half().cuda(),
                     image_sizes=[image.size],
+                    agnostic_sparsity=args.agnostic_sparsity,
+                    aware_sparsity=args.aware_sparsity,
                     do_sample=True if args.temperature > 0 else False,
                     temperature=args.temperature,
                     top_p=args.top_p,
                     num_beams=args.num_beams,
                     # no_repeat_ngram_size=3,
                     max_new_tokens=1024,
-                    use_cache=True)
+                    use_cache=True,
+                    #return_dict_in_generate=True,
+                    return_dict=True
+                )
 
             outputs = tokenizer.batch_decode(output_ids, skip_special_tokens=True)[0].strip()
 
@@ -155,6 +165,8 @@ if __name__ == "__main__":
     parser.add_argument("--all-rounds", action="store_true")
     parser.add_argument("--single-pred-prompt", action="store_true")
     parser.add_argument("--lang", type=str, default="en")
+    parser.add_argument("--agnostic-sparsity", type=float, default=0.0)
+    parser.add_argument("--aware-sparsity", type=float, default=0.0)
     args = parser.parse_args()
 
     eval_model(args)
